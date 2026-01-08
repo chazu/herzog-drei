@@ -3,6 +3,7 @@ package main
 import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"github.com/chazu/herzog-drei/pkg/base"
 	"github.com/chazu/herzog-drei/pkg/mech"
 )
 
@@ -23,9 +24,13 @@ type Game struct {
 	camera rl.Camera3D
 
 	// Player mech
-	playerMech    *mech.Mech
-	mechInput     *mech.InputHandler
-	mechRenderer  *mech.Renderer
+	playerMech   *mech.Mech
+	mechInput    *mech.InputHandler
+	mechRenderer *mech.Renderer
+
+	// Bases
+	baseManager  *base.Manager
+	baseRenderer *base.Renderer
 }
 
 // NewGame creates and initializes a new game instance
@@ -37,10 +42,15 @@ func NewGame() *Game {
 
 // init sets up initial game state
 func (g *Game) init() {
-	// Create player mech at origin
-	g.playerMech = mech.New(rl.NewVector3(0, 3, 0), mech.DefaultConfig())
+	// Create player mech near Player 1's HQ
+	g.playerMech = mech.New(rl.NewVector3(0, 3, -12), mech.DefaultConfig())
 	g.mechInput = mech.NewInputHandler()
 	g.mechRenderer = mech.NewRenderer()
+
+	// Initialize base system
+	g.baseManager = base.NewManager(base.DefaultConfig())
+	g.baseRenderer = base.NewRenderer()
+	g.baseManager.CreateDefaultMap()
 
 	// Set up 3D camera (will follow player)
 	g.camera = rl.Camera3D{
@@ -61,6 +71,9 @@ func (g *Game) Update() {
 
 	// Update mech
 	g.playerMech.Update(dt)
+
+	// Update bases (income, capture progress, spawns)
+	g.baseManager.Update(dt)
 
 	// Update camera to follow mech
 	g.updateCamera(dt)
@@ -106,13 +119,13 @@ func (g *Game) Render() {
 	rl.BeginMode3D(g.camera)
 
 	// Draw ground plane
-	rl.DrawPlane(rl.NewVector3(0, 0, 0), rl.NewVector2(40, 40), rl.Color{R: 60, G: 64, B: 72, A: 255})
+	rl.DrawPlane(rl.NewVector3(0, 0, 0), rl.NewVector2(50, 50), rl.Color{R: 60, G: 64, B: 72, A: 255})
 
 	// Draw grid for reference
-	rl.DrawGrid(40, 1.0)
+	rl.DrawGrid(50, 1.0)
 
-	// Draw some reference objects scattered around
-	g.drawEnvironment()
+	// Draw bases
+	g.baseRenderer.Draw(g.baseManager)
 
 	// Draw player mech
 	g.mechRenderer.Draw(g.playerMech)
@@ -126,28 +139,10 @@ func (g *Game) Render() {
 	// Draw mech UI
 	g.mechRenderer.DrawUI(g.playerMech, screenWidth, screenHeight)
 
+	// Draw base UI (credits, base counts)
+	g.baseRenderer.DrawUI(g.baseManager, screenWidth, screenHeight)
+
 	rl.EndDrawing()
-}
-
-func (g *Game) drawEnvironment() {
-	// Draw some buildings/obstacles for reference
-	buildings := []struct {
-		pos    rl.Vector3
-		size   rl.Vector3
-		color  rl.Color
-	}{
-		{rl.NewVector3(8, 1, 8), rl.NewVector3(2, 2, 2), rl.DarkGray},
-		{rl.NewVector3(-8, 1.5, 5), rl.NewVector3(3, 3, 3), rl.DarkGray},
-		{rl.NewVector3(5, 0.75, -8), rl.NewVector3(1.5, 1.5, 1.5), rl.DarkGray},
-		{rl.NewVector3(-6, 1, -6), rl.NewVector3(2, 2, 2), rl.DarkGray},
-		{rl.NewVector3(10, 2, -3), rl.NewVector3(4, 4, 2), rl.DarkGray},
-		{rl.NewVector3(-10, 1.25, 10), rl.NewVector3(2.5, 2.5, 2.5), rl.DarkGray},
-	}
-
-	for _, b := range buildings {
-		rl.DrawCube(b.pos, b.size.X, b.size.Y, b.size.Z, b.color)
-		rl.DrawCubeWires(b.pos, b.size.X, b.size.Y, b.size.Z, rl.Black)
-	}
 }
 
 func main() {
