@@ -34,8 +34,33 @@ const (
 	StateMoving
 	StateAttacking
 	StateDead
-	StateCapturing // Infantry only
+	StateCapturing    // Infantry only
+	StateBeingCarried // Being transported by mech
 )
+
+// Order represents the unit's assigned behavior
+type Order int
+
+const (
+	OrderNone Order = iota
+	OrderAttackHQ       // Attack enemy HQ
+	OrderAttackNearest  // Attack nearest enemy
+	OrderCaptureOutpost // Capture nearest outpost
+	OrderDefendPosition // Hold current position
+	OrderPatrolArea     // Patrol around drop point
+)
+
+// OrderNames returns human-readable order names
+func OrderNames() []string {
+	return []string{
+		"None",
+		"Attack HQ",
+		"Attack Nearest",
+		"Capture Outpost",
+		"Defend Position",
+		"Patrol Area",
+	}
+}
 
 // Config holds unit configuration values
 type Config struct {
@@ -69,12 +94,13 @@ type Unit struct {
 	Team   Team
 
 	// Position and movement
-	Position   rl.Vector3
-	Velocity   rl.Vector3
-	Rotation   float32 // Y-axis rotation in radians
+	Position rl.Vector3
+	Velocity rl.Vector3
+	Rotation float32 // Y-axis rotation in radians
 
 	// State
 	State State
+	Order Order
 
 	// Health
 	Health    float32
@@ -85,10 +111,15 @@ type Unit struct {
 	Target         *Unit // Current attack target
 
 	// AI
-	Objective     rl.Vector3 // Where the unit is trying to go
-	HasObjective  bool
-	Path          []rl.Vector2 // Pathfinding result (X, Z)
-	PathIndex     int
+	Objective    rl.Vector3   // Where the unit is trying to go
+	HasObjective bool
+	Path         []rl.Vector2 // Pathfinding result (X, Z)
+	PathIndex    int
+
+	// Order-specific data
+	OrderTarget  rl.Vector3 // Target position for orders
+	PatrolCenter rl.Vector3 // Center of patrol area
+	PatrolRadius float32
 }
 
 // New creates a new unit of the specified type
@@ -109,7 +140,7 @@ func New(id uint32, unitType UnitType, team Team, pos rl.Vector3) *Unit {
 
 // Update updates the unit state for the frame
 func (u *Unit) Update(dt float32) {
-	if u.State == StateDead {
+	if u.State == StateDead || u.State == StateBeingCarried {
 		return
 	}
 
@@ -118,8 +149,11 @@ func (u *Unit) Update(dt float32) {
 		u.AttackCooldown -= dt
 	}
 
-	// Movement along path
-	if u.HasObjective && len(u.Path) > 0 && u.PathIndex < len(u.Path) {
+	// Execute order-based behavior if we have an order
+	if u.Order != OrderNone {
+		u.executeOrder(dt)
+	} else if u.HasObjective && len(u.Path) > 0 && u.PathIndex < len(u.Path) {
+		// Movement along path
 		u.updateMovement(dt)
 	} else if u.HasObjective {
 		// Direct movement to objective (fallback when no path)
@@ -135,6 +169,110 @@ func (u *Unit) Update(dt float32) {
 			u.State = StateIdle
 		}
 	}
+}
+
+func (u *Unit) executeOrder(dt float32) {
+	switch u.Order {
+	case OrderNone:
+		u.State = StateIdle
+		u.Velocity = rl.Vector3{}
+
+	case OrderAttackHQ, OrderAttackNearest:
+		u.executeAttackOrder(dt)
+
+	case OrderCaptureOutpost:
+		u.executeCaptureOrder(dt)
+
+	case OrderDefendPosition:
+		u.executeDefendOrder(dt)
+
+	case OrderPatrolArea:
+		u.executePatrolOrder(dt)
+	}
+}
+
+func (u *Unit) executeAttackOrder(dt float32) {
+	// Move toward target position
+	if u.moveTowardOrder(u.OrderTarget, dt) {
+		// Reached target, attack if we have a target
+		if u.Target != nil && u.AttackCooldown <= 0 {
+			u.State = StateAttacking
+			u.Target.TakeDamage(u.Config.AttackDamage)
+			u.AttackCooldown = 1.0 / u.Config.AttackRate
+		}
+	}
+}
+
+func (u *Unit) executeCaptureOrder(dt float32) {
+	// Move toward capture target
+	u.moveTowardOrder(u.OrderTarget, dt)
+	// Capture logic handled by base system checking infantry in range
+}
+
+func (u *Unit) executeDefendOrder(dt float32) {
+	// Stay near order target, attack enemies in range
+	dist := u.DistanceToPoint(u.OrderTarget)
+	if dist > 2.0 {
+		u.moveTowardOrder(u.OrderTarget, dt)
+	} else {
+		u.Velocity = rl.Vector3{}
+		u.State = StateIdle
+		// Attack logic handled externally
+	}
+}
+
+func (u *Unit) executePatrolOrder(dt float32) {
+	// Move around patrol center
+	dist := u.DistanceToPoint(u.PatrolCenter)
+
+	if dist > u.PatrolRadius {
+		// Move back toward center
+		u.moveTowardOrder(u.PatrolCenter, dt)
+	} else {
+		// Wander within patrol area
+		if u.State == StateIdle {
+			// Pick a new random point in patrol area
+			angle := float32(math.Pi * 2.0 * float64(rl.GetRandomValue(0, 100)) / 100.0)
+			radius := float32(rl.GetRandomValue(0, int32(u.PatrolRadius*100))) / 100.0
+			u.OrderTarget = rl.Vector3{
+				X: u.PatrolCenter.X + radius*float32(math.Cos(float64(angle))),
+				Y: 0,
+				Z: u.PatrolCenter.Z + radius*float32(math.Sin(float64(angle))),
+			}
+		}
+		u.moveTowardOrder(u.OrderTarget, dt)
+	}
+}
+
+// moveTowardOrder moves the unit toward a target position for order execution
+// Returns true if within attack range
+func (u *Unit) moveTowardOrder(target rl.Vector3, dt float32) bool {
+	dx := target.X - u.Position.X
+	dz := target.Z - u.Position.Z
+	dist := float32(math.Sqrt(float64(dx*dx + dz*dz)))
+
+	if dist < u.Config.AttackRange {
+		u.Velocity = rl.Vector3{}
+		u.State = StateIdle
+		return true
+	}
+
+	if dist > 0.1 {
+		u.State = StateMoving
+		u.Velocity = rl.Vector3{
+			X: (dx / dist) * u.Config.Speed,
+			Y: 0,
+			Z: (dz / dist) * u.Config.Speed,
+		}
+
+		// Update position
+		u.Position.X += u.Velocity.X * dt
+		u.Position.Z += u.Velocity.Z * dt
+
+		// Update rotation to face movement direction
+		u.Rotation = float32(math.Atan2(float64(dx), float64(dz)))
+	}
+	return false
 }
 
 func (u *Unit) updateMovement(dt float32) {
@@ -284,6 +422,49 @@ func (u *Unit) GetForward() rl.Vector3 {
 		Y: 0,
 		Z: float32(math.Cos(float64(u.Rotation))),
 	}
+}
+
+// Transport methods
+
+// PickUp marks the unit as being carried
+func (u *Unit) PickUp() {
+	u.State = StateBeingCarried
+	u.Velocity = rl.Vector3{}
+	u.ClearObjective()
+}
+
+// Drop places the unit at a position with an order
+func (u *Unit) Drop(position rl.Vector3, order Order) {
+	u.Position = position
+	u.State = StateIdle
+	u.SetOrder(order, position)
+}
+
+// IsCarried returns true if the unit is being carried
+func (u *Unit) IsCarried() bool {
+	return u.State == StateBeingCarried
+}
+
+// SetOrder sets the unit's order with a target position
+func (u *Unit) SetOrder(order Order, target rl.Vector3) {
+	u.Order = order
+	u.OrderTarget = target
+	u.HasObjective = true
+	u.Objective = target
+
+	if order == OrderPatrolArea {
+		u.PatrolCenter = target
+		u.PatrolRadius = 5.0 // Default patrol radius
+	}
+}
+
+// GetOrderName returns the display name for the unit's current order
+func (u *Unit) GetOrderName() string {
+	names := OrderNames()
+	if int(u.Order) < len(names) {
+		return names[u.Order]
+	}
+	return "Unknown"
 }
 
 // Helper functions

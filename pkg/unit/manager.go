@@ -73,7 +73,7 @@ func (m *Manager) Update(dt float32) {
 // updateAI handles basic AI behaviors for all units
 func (m *Manager) updateAI(dt float32) {
 	for _, u := range m.units {
-		if u.IsDead() {
+		if u.IsDead() || u.IsCarried() {
 			continue
 		}
 
@@ -221,6 +221,24 @@ func (m *Manager) GetEnemiesInRadius(center rl.Vector3, radius float32, myTeam T
 		}
 	}
 	return result
+}
+
+// GetNearestPickupableUnit returns the nearest friendly unit that can be picked up
+func (m *Manager) GetNearestPickupableUnit(center rl.Vector3, radius float32, team Team) *Unit {
+	var nearest *Unit
+	nearestDist := radius
+
+	for _, u := range m.units {
+		if u.IsDead() || u.IsCarried() || u.Team != team {
+			continue
+		}
+		dist := u.DistanceToPoint(center)
+		if dist <= nearestDist {
+			nearest = u
+			nearestDist = dist
+		}
+	}
+	return nearest
 }
 
 // Count returns the total number of units

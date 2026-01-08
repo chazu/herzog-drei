@@ -121,6 +121,9 @@ func (g *Game) Update() {
 		g.playerMech.Position.Y = g.tileMap.GetHeightAt(g.playerMech.Position.X, g.playerMech.Position.Z)
 	}
 
+	// Handle transport (pickup/drop units)
+	g.handleTransport()
+
 	// Update units
 	g.unitManager.Update(dt)
 
@@ -139,6 +142,27 @@ func (g *Game) Update() {
 	// Update camera to follow mech
 	g.camera.SetTarget(g.playerMech.Position)
 	g.camera.Update()
+}
+
+// handleTransport handles picking up and dropping units
+func (g *Game) handleTransport() {
+	// Handle pickup
+	if g.playerMech.InputPickup && g.playerMech.CanPickup() {
+		pickupRadius := float32(2.0)
+		nearUnit := g.unitManager.GetNearestPickupableUnit(
+			g.playerMech.Position,
+			pickupRadius,
+			g.playerMech.Team,
+		)
+		if nearUnit != nil {
+			g.playerMech.PickupUnit(nearUnit)
+		}
+	}
+
+	// Handle drop
+	if g.playerMech.InputDrop && g.playerMech.CanDrop() {
+		g.playerMech.DropUnit()
+	}
 }
 
 // Render draws the game each frame
@@ -191,9 +215,18 @@ func (g *Game) Render() {
 	// Show current terrain info
 	terrain := g.tileMap.GetTerrainAt(g.playerMech.Position.X, g.playerMech.Position.Z)
 	info := tilemap.GetTerrainInfo(terrain)
-	rl.DrawText("Terrain: "+info.Name, 10, screenHeight-80, 15, rl.DarkGray)
-	rl.DrawText("Space: Transform | Mouse: Aim | Click: Shoot | Scroll: Zoom", 10, screenHeight-55, 12, rl.DarkGray)
-	rl.DrawText("1-6: Purchase units at nearest owned base (costs credits)", 10, screenHeight-35, 12, rl.DarkGray)
+	rl.DrawText("Terrain: "+info.Name, 10, screenHeight-100, 15, rl.DarkGray)
+
+	// Show transport info
+	if g.playerMech.IsCarrying() {
+		carriedInfo := "Carrying: " + g.playerMech.CarriedUnit.Config.Type.String()
+		rl.DrawText(carriedInfo, 10, screenHeight-80, 15, rl.Green)
+	}
+	orderInfo := "Order: " + g.playerMech.GetSelectedOrderName() + " (R/F to cycle)"
+	rl.DrawText(orderInfo, 10, screenHeight-60, 15, rl.DarkGray)
+
+	rl.DrawText("T: Transform | E: Pickup | Q: Drop | R/F: Cycle Order | Scroll: Zoom", 10, screenHeight-40, 12, rl.DarkGray)
+	rl.DrawText("1-6: Spawn units | 1:Infantry 2:Tank 3:Bike 4:SAM 5:Boat 6:Supply", 10, screenHeight-20, 12, rl.DarkGray)
 
 	rl.EndDrawing()
 }
