@@ -5,6 +5,7 @@ import (
 
 	"github.com/chazu/herzog-drei/pkg/mech"
 	"github.com/chazu/herzog-drei/pkg/tilemap"
+	"github.com/chazu/herzog-drei/pkg/unit"
 )
 
 const (
@@ -28,6 +29,11 @@ type Game struct {
 	playerMech   *mech.Mech
 	mechInput    *mech.InputHandler
 	mechRenderer *mech.Renderer
+
+	// Units
+	unitManager    *unit.Manager
+	unitRenderer   *unit.Renderer
+	unitPathfinder *unit.Pathfinder
 }
 
 // NewGame creates and initializes a new game instance
@@ -60,6 +66,15 @@ func (g *Game) init() {
 	g.minimap = tilemap.NewMinimap()
 	g.minimap.SetPosition(screenWidth-210, 10)
 	g.minimap.SetSize(200, 150)
+
+	// Initialize unit system
+	g.unitManager = unit.NewManager(100) // Max 100 units
+	g.unitRenderer = unit.NewRenderer()
+	g.unitPathfinder = unit.NewPathfinder(mapWidth, mapHeight, 1.0)
+	g.unitManager.Pathfinder = g.unitPathfinder
+
+	// Spawn test units for demonstration
+	g.spawnTestUnits()
 }
 
 // Update handles game logic each frame
@@ -86,6 +101,12 @@ func (g *Game) Update() {
 		g.playerMech.Position.Y = g.tileMap.GetHeightAt(g.playerMech.Position.X, g.playerMech.Position.Z)
 	}
 
+	// Update units
+	g.unitManager.Update(dt)
+
+	// Handle unit spawning (press 1-6 to spawn player units)
+	g.handleUnitSpawnInput()
+
 	// Update camera to follow mech
 	g.camera.SetTarget(g.playerMech.Position)
 	g.camera.Update()
@@ -101,6 +122,9 @@ func (g *Game) Render() {
 
 	// Render tile map
 	g.tileMap.Render()
+
+	// Draw units
+	g.unitRenderer.Draw(g.unitManager)
 
 	// Draw player mech
 	g.mechRenderer.Draw(g.playerMech)
@@ -120,13 +144,86 @@ func (g *Game) Render() {
 	// Draw mech UI (health bar, mode indicator)
 	g.mechRenderer.DrawUI(g.playerMech, screenWidth, screenHeight)
 
+	// Draw unit UI
+	g.unitRenderer.DrawUI(g.unitManager, screenWidth, screenHeight)
+
 	// Show current terrain info
 	terrain := g.tileMap.GetTerrainAt(g.playerMech.Position.X, g.playerMech.Position.Z)
 	info := tilemap.GetTerrainInfo(terrain)
-	rl.DrawText("Terrain: "+info.Name, 10, screenHeight-60, 15, rl.DarkGray)
-	rl.DrawText("Space: Transform | Mouse: Aim | Click: Shoot | Scroll: Zoom", 10, screenHeight-35, 12, rl.DarkGray)
+	rl.DrawText("Terrain: "+info.Name, 10, screenHeight-80, 15, rl.DarkGray)
+	rl.DrawText("Space: Transform | Mouse: Aim | Click: Shoot | Scroll: Zoom", 10, screenHeight-55, 12, rl.DarkGray)
+	rl.DrawText("1-6: Spawn units | 1:Infantry 2:Tank 3:Bike 4:SAM 5:Boat 6:Supply", 10, screenHeight-35, 12, rl.DarkGray)
 
 	rl.EndDrawing()
+}
+
+// spawnTestUnits creates initial units for testing
+func (g *Game) spawnTestUnits() {
+	centerX, centerZ := g.tileMap.TileToWorld(mapWidth/2, mapHeight/2)
+
+	// Spawn player units on left side
+	g.unitManager.SpawnWithObjective(
+		unit.TypeInfantry, unit.TeamPlayer,
+		rl.NewVector3(centerX-10, 0, centerZ+5),
+		rl.NewVector3(centerX+10, 0, centerZ+5),
+	)
+	g.unitManager.SpawnWithObjective(
+		unit.TypeTank, unit.TeamPlayer,
+		rl.NewVector3(centerX-10, 0, centerZ),
+		rl.NewVector3(centerX+10, 0, centerZ),
+	)
+	g.unitManager.SpawnWithObjective(
+		unit.TypeMotorcycle, unit.TeamPlayer,
+		rl.NewVector3(centerX-10, 0, centerZ-5),
+		rl.NewVector3(centerX+10, 0, centerZ-5),
+	)
+
+	// Spawn enemy units on right side
+	g.unitManager.SpawnWithObjective(
+		unit.TypeInfantry, unit.TeamEnemy,
+		rl.NewVector3(centerX+10, 0, centerZ+5),
+		rl.NewVector3(centerX-10, 0, centerZ+5),
+	)
+	g.unitManager.SpawnWithObjective(
+		unit.TypeTank, unit.TeamEnemy,
+		rl.NewVector3(centerX+10, 0, centerZ),
+		rl.NewVector3(centerX-10, 0, centerZ),
+	)
+	g.unitManager.SpawnWithObjective(
+		unit.TypeSAM, unit.TeamEnemy,
+		rl.NewVector3(centerX+10, 0, centerZ-5),
+		rl.NewVector3(centerX-10, 0, centerZ-5),
+	)
+}
+
+// handleUnitSpawnInput spawns units based on number key presses
+func (g *Game) handleUnitSpawnInput() {
+	// Spawn near player mech position
+	spawnPos := g.playerMech.Position
+	spawnPos.Y = 0 // Ground level
+
+	// Offset spawn slightly behind mech
+	spawnPos.X -= g.playerMech.GetForward().X * 2
+	spawnPos.Z -= g.playerMech.GetForward().Z * 2
+
+	if rl.IsKeyPressed(rl.KeyOne) {
+		g.unitManager.Spawn(unit.TypeInfantry, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeyTwo) {
+		g.unitManager.Spawn(unit.TypeTank, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeyThree) {
+		g.unitManager.Spawn(unit.TypeMotorcycle, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeyFour) {
+		g.unitManager.Spawn(unit.TypeSAM, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeyFive) {
+		g.unitManager.Spawn(unit.TypeBoat, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeySix) {
+		g.unitManager.Spawn(unit.TypeSupply, unit.TeamPlayer, spawnPos)
+	}
 }
 
 func main() {
