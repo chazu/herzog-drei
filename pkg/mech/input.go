@@ -9,6 +9,10 @@ import (
 // InputHandler processes player input for the mech
 type InputHandler struct {
 	transformPressed bool // Track transform key state for edge detection
+	pickupPressed    bool // Track pickup key state for edge detection
+	dropPressed      bool // Track drop key state for edge detection
+	orderNextPressed bool // Track order cycle next key state
+	orderPrevPressed bool // Track order cycle prev key state
 }
 
 // NewInputHandler creates a new input handler
@@ -50,4 +54,31 @@ func (h *InputHandler) Update(m *Mech) {
 	transformDown := rl.IsKeyDown(rl.KeyT)
 	m.InputTransform = transformDown && !h.transformPressed
 	h.transformPressed = transformDown
+
+	// Pickup input (E key) - edge triggered
+	pickupDown := rl.IsKeyDown(rl.KeyE)
+	m.InputPickup = pickupDown && !h.pickupPressed
+	h.pickupPressed = pickupDown
+
+	// Drop input (Q key) - edge triggered
+	dropDown := rl.IsKeyDown(rl.KeyQ)
+	m.InputDrop = dropDown && !h.dropPressed
+	h.dropPressed = dropDown
+
+	// Order cycling (R = next, F = previous) - edge triggered
+	orderNextDown := rl.IsKeyDown(rl.KeyR)
+	m.InputOrderNext = orderNextDown && !h.orderNextPressed
+	h.orderNextPressed = orderNextDown
+
+	orderPrevDown := rl.IsKeyDown(rl.KeyF)
+	m.InputOrderPrev = orderPrevDown && !h.orderPrevPressed
+	h.orderPrevPressed = orderPrevDown
+
+	// Handle order cycling immediately
+	if m.InputOrderNext {
+		m.CycleOrderNext()
+	}
+	if m.InputOrderPrev {
+		m.CycleOrderPrev()
+	}
 }

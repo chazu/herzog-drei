@@ -4,6 +4,8 @@ import (
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"github.com/chazu/herzog-drei/pkg/unit"
 )
 
 // Mode represents the mech's current form
@@ -104,23 +106,34 @@ type Mech struct {
 	TransformProgress float32 // 0.0 to 1.0, used for animation
 
 	// Input state (set by player input)
-	InputMove  rl.Vector2 // normalized movement input (x, z)
-	InputShoot bool
+	InputMove      rl.Vector2 // normalized movement input (x, z)
+	InputShoot     bool
 	InputTransform bool
+	InputPickup    bool // Attempt to pick up unit
+	InputDrop      bool // Attempt to drop unit
+	InputOrderNext bool // Cycle to next order
+	InputOrderPrev bool // Cycle to previous order
+
+	// Transport system
+	CarriedUnit   *unit.Unit // Currently carried unit (nil if not carrying)
+	SelectedOrder unit.Order // Order to assign when dropping
+	Team          unit.Team  // Which team owns this mech
 }
 
 // New creates a new mech at the given position
 func New(pos rl.Vector3, cfg Config) *Mech {
 	return &Mech{
-		Config:    cfg,
-		Position:  pos,
-		Velocity:  rl.Vector3{},
-		Rotation:  0,
-		Mode:      ModeJet,
-		State:     StateIdle,
-		Health:    cfg.MaxHealth,
-		MaxHealth: cfg.MaxHealth,
-		Projectiles: make([]Projectile, 0, 32),
+		Config:        cfg,
+		Position:      pos,
+		Velocity:      rl.Vector3{},
+		Rotation:      0,
+		Mode:          ModeJet,
+		State:         StateIdle,
+		Health:        cfg.MaxHealth,
+		MaxHealth:     cfg.MaxHealth,
+		Projectiles:   make([]Projectile, 0, 32),
+		SelectedOrder: unit.OrderAttackNearest, // Default order
+		Team:          unit.TeamPlayer,         // Default to player team
 	}
 }
 
@@ -366,6 +379,84 @@ func (m *Mech) GetForward() rl.Vector3 {
 		Y: 0,
 		Z: float32(math.Cos(float64(m.Rotation))),
 	}
+}
+
+// Transport methods
+
+// CanPickup returns true if the mech can pick up a unit
+func (m *Mech) CanPickup() bool {
+	return m.Mode == ModeJet && m.CarriedUnit == nil && m.State != StateTransforming
+}
+
+// CanDrop returns true if the mech can drop a unit
+func (m *Mech) CanDrop() bool {
+	return m.Mode == ModeJet && m.CarriedUnit != nil && m.State != StateTransforming
+}
+
+// IsCarrying returns true if the mech is carrying a unit
+func (m *Mech) IsCarrying() bool {
+	return m.CarriedUnit != nil
+}
+
+// PickupUnit picks up a unit (called externally when pickup is valid)
+func (m *Mech) PickupUnit(u *unit.Unit) bool {
+	if !m.CanPickup() || u == nil {
+		return false
+	}
+	if u.Team != m.Team {
+		return false // Can only pick up friendly units
+	}
+
+	m.CarriedUnit = u
+	u.PickUp()
+	return true
+}
+
+// DropUnit drops the carried unit at the mech's current position
+// Returns the dropped unit (or nil if not carrying)
+func (m *Mech) DropUnit() *unit.Unit {
+	if !m.CanDrop() {
+		return nil
+	}
+
+	u := m.CarriedUnit
+	m.CarriedUnit = nil
+
+	// Drop position is below the mech (on the ground)
+	dropPos := rl.Vector3{
+		X: m.Position.X,
+		Y: 0,
+		Z: m.Position.Z,
+	}
+
+	u.Drop(dropPos, m.SelectedOrder)
+	return u
+}
+
+// CycleOrderNext cycles to the next order type
+func (m *Mech) CycleOrderNext() {
+	m.SelectedOrder++
+	if m.SelectedOrder > unit.OrderPatrolArea {
+		m.SelectedOrder = unit.OrderAttackHQ
+	}
+}
+
+// CycleOrderPrev cycles to the previous order type
+func (m *Mech) CycleOrderPrev() {
+	if m.SelectedOrder <= unit.OrderAttackHQ {
+		m.SelectedOrder = unit.OrderPatrolArea
+	} else {
+		m.SelectedOrder--
+	}
+}
+
+// GetSelectedOrderName returns the name of the currently selected order
+func (m *Mech) GetSelectedOrderName() string {
+	names := unit.OrderNames()
+	if int(m.SelectedOrder) < len(names) {
+		return names[m.SelectedOrder]
+	}
+	return "Unknown"
 }
 
 // Helper functions

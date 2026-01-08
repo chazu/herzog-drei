@@ -113,6 +113,11 @@ func GetConfig(t UnitType) Config {
 
 // TypeName returns the display name for a unit type
 func TypeName(t UnitType) string {
+	return t.String()
+}
+
+// String returns the display name for a unit type
+func (t UnitType) String() string {
 	switch t {
 	case TypeInfantry:
 		return "Infantry"
