@@ -26,8 +26,8 @@ func NewManager(cfg Config) *Manager {
 		Config: cfg,
 		Bases:  make([]*Base, 0, 16),
 		nextID: 1,
-		Player1: PlayerState{Credits: 100}, // Starting credits
-		Player2: PlayerState{Credits: 100},
+		Player1: PlayerState{Credits: 500}, // Starting credits
+		Player2: PlayerState{Credits: 500},
 	}
 }
 

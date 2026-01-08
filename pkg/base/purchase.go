@@ -1,47 +1,39 @@
 package base
 
+import (
+	"github.com/chazu/herzog-drei/pkg/unit"
+)
+
+// AllUnitTypes lists all purchasable unit types
+var AllUnitTypes = []unit.UnitType{
+	unit.TypeInfantry,
+	unit.TypeTank,
+	unit.TypeMotorcycle,
+	unit.TypeSAM,
+	unit.TypeBoat,
+	unit.TypeSupply,
+}
+
 // UnitCost returns the credit cost for a unit type
-func UnitCost(unitType UnitType) float32 {
-	switch unitType {
-	case UnitInfantry:
-		return 25
-	case UnitTank:
-		return 100
-	case UnitAA:
-		return 75
-	case UnitArtillery:
-		return 150
-	default:
-		return 0
-	}
+func UnitCost(unitType unit.UnitType) float32 {
+	return float32(unit.GetConfig(unitType).Cost)
 }
 
 // UnitName returns a display name for a unit type
-func UnitName(unitType UnitType) string {
-	switch unitType {
-	case UnitInfantry:
-		return "Infantry"
-	case UnitTank:
-		return "Tank"
-	case UnitAA:
-		return "AA Gun"
-	case UnitArtillery:
-		return "Artillery"
-	default:
-		return "Unknown"
-	}
+func UnitName(unitType unit.UnitType) string {
+	return unit.TypeName(unitType)
 }
 
 // PurchaseRequest represents a request to purchase a unit
 type PurchaseRequest struct {
-	UnitType UnitType
+	UnitType unit.UnitType
 	BaseID   int
 	Owner    Owner
 }
 
 // TryPurchaseUnit attempts to purchase and queue a unit at a base
 // Returns true if successful
-func (m *Manager) TryPurchaseUnit(baseID int, unitType UnitType, owner Owner) bool {
+func (m *Manager) TryPurchaseUnit(baseID int, unitType unit.UnitType, owner Owner) bool {
 	base := m.GetBase(baseID)
 	if base == nil {
 		return false
@@ -64,11 +56,11 @@ func (m *Manager) TryPurchaseUnit(baseID int, unitType UnitType, owner Owner) bo
 }
 
 // GetPurchasableUnits returns units that can be purchased with current credits
-func (m *Manager) GetPurchasableUnits(owner Owner) []UnitType {
+func (m *Manager) GetPurchasableUnits(owner Owner) []unit.UnitType {
 	credits := m.GetCredits(owner)
-	available := make([]UnitType, 0, 4)
+	available := make([]unit.UnitType, 0, len(AllUnitTypes))
 
-	for _, ut := range []UnitType{UnitInfantry, UnitTank, UnitAA, UnitArtillery} {
+	for _, ut := range AllUnitTypes {
 		if UnitCost(ut) <= credits {
 			available = append(available, ut)
 		}
