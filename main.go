@@ -117,8 +117,11 @@ func (g *Game) Update() {
 	// Update bases (income, capture progress, spawns)
 	g.baseManager.Update(dt)
 
-	// Handle unit spawning (press 1-6 to spawn player units)
-	g.handleUnitSpawnInput()
+	// Process base spawn queues - spawn units from bases
+	g.processBaseSpawns()
+
+	// Handle unit purchasing (press 1-6 to buy units at nearest owned base)
+	g.handleUnitPurchaseInput()
 
 	// Update camera to follow mech
 	g.camera.SetTarget(g.playerMech.Position)
@@ -171,7 +174,7 @@ func (g *Game) Render() {
 	info := tilemap.GetTerrainInfo(terrain)
 	rl.DrawText("Terrain: "+info.Name, 10, screenHeight-80, 15, rl.DarkGray)
 	rl.DrawText("Space: Transform | Mouse: Aim | Click: Shoot | Scroll: Zoom", 10, screenHeight-55, 12, rl.DarkGray)
-	rl.DrawText("1-6: Spawn units | 1:Infantry 2:Tank 3:Bike 4:SAM 5:Boat 6:Supply", 10, screenHeight-35, 12, rl.DarkGray)
+	rl.DrawText("1-6: Purchase units at nearest owned base (costs credits)", 10, screenHeight-35, 12, rl.DarkGray)
 
 	rl.EndDrawing()
 }
@@ -215,34 +218,81 @@ func (g *Game) spawnTestUnits() {
 	)
 }
 
-// handleUnitSpawnInput spawns units based on number key presses
-func (g *Game) handleUnitSpawnInput() {
-	// Spawn near player mech position
-	spawnPos := g.playerMech.Position
-	spawnPos.Y = 0 // Ground level
+// processBaseSpawns handles spawning units from base queues
+func (g *Game) processBaseSpawns() {
+	for _, b := range g.baseManager.Bases {
+		unitType, spawned := b.TrySpawn(g.baseManager.Config)
+		if !spawned {
+			continue
+		}
 
-	// Offset spawn slightly behind mech
-	spawnPos.X -= g.playerMech.GetForward().X * 2
-	spawnPos.Z -= g.playerMech.GetForward().Z * 2
+		// Map base owner to unit team
+		var team unit.Team
+		switch b.Owner {
+		case base.OwnerPlayer1:
+			team = unit.TeamPlayer
+		case base.OwnerPlayer2:
+			team = unit.TeamEnemy
+		default:
+			continue // Neutral bases shouldn't spawn
+		}
 
-	if rl.IsKeyPressed(rl.KeyOne) {
-		g.unitManager.Spawn(unit.TypeInfantry, unit.TeamPlayer, spawnPos)
+		// Spawn the unit at the base's spawn point
+		g.unitManager.Spawn(unitType, team, b.SpawnPoint)
 	}
-	if rl.IsKeyPressed(rl.KeyTwo) {
-		g.unitManager.Spawn(unit.TypeTank, unit.TeamPlayer, spawnPos)
+}
+
+// handleUnitPurchaseInput purchases units based on number key presses
+func (g *Game) handleUnitPurchaseInput() {
+	// Find nearest owned base to purchase from
+	nearestBase := g.findNearestOwnedBase(base.OwnerPlayer1)
+	if nearestBase == nil {
+		return // No owned bases to purchase from
 	}
-	if rl.IsKeyPressed(rl.KeyThree) {
-		g.unitManager.Spawn(unit.TypeMotorcycle, unit.TeamPlayer, spawnPos)
+
+	// Map keys 1-6 to unit types
+	type keyMapping struct {
+		key      int32
+		unitType unit.UnitType
 	}
-	if rl.IsKeyPressed(rl.KeyFour) {
-		g.unitManager.Spawn(unit.TypeSAM, unit.TeamPlayer, spawnPos)
+	mappings := []keyMapping{
+		{rl.KeyOne, unit.TypeInfantry},
+		{rl.KeyTwo, unit.TypeTank},
+		{rl.KeyThree, unit.TypeMotorcycle},
+		{rl.KeyFour, unit.TypeSAM},
+		{rl.KeyFive, unit.TypeBoat},
+		{rl.KeySix, unit.TypeSupply},
 	}
-	if rl.IsKeyPressed(rl.KeyFive) {
-		g.unitManager.Spawn(unit.TypeBoat, unit.TeamPlayer, spawnPos)
+
+	for _, m := range mappings {
+		if rl.IsKeyPressed(m.key) {
+			// Try to purchase - this checks credits and queues at the base
+			g.baseManager.TryPurchaseUnit(nearestBase.ID, m.unitType, base.OwnerPlayer1)
+		}
 	}
-	if rl.IsKeyPressed(rl.KeySix) {
-		g.unitManager.Spawn(unit.TypeSupply, unit.TeamPlayer, spawnPos)
+}
+
+// findNearestOwnedBase finds the player's nearest owned base
+func (g *Game) findNearestOwnedBase(owner base.Owner) *base.Base {
+	ownedBases := g.baseManager.GetBasesOwnedBy(owner)
+	if len(ownedBases) == 0 {
+		return nil
 	}
+
+	var nearest *base.Base
+	nearestDist := float32(1e9)
+
+	for _, b := range ownedBases {
+		dx := b.Position.X - g.playerMech.Position.X
+		dz := b.Position.Z - g.playerMech.Position.Z
+		dist := dx*dx + dz*dz // squared distance is fine for comparison
+		if dist < nearestDist {
+			nearestDist = dist
+			nearest = b
+		}
+	}
+
+	return nearest
 }
 
 func main() {

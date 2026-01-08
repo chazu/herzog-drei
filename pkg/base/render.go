@@ -210,17 +210,16 @@ func (r *Renderer) drawSpawnPoint(b *Base) {
 
 // DrawUI renders base-related UI elements
 func (r *Renderer) DrawUI(mgr *Manager, screenWidth, screenHeight int) {
-	// Credits display for Player 1
-	creditsText := fmt.Sprintf("Credits: $%.0f", mgr.Player1.Credits)
-	rl.DrawText(creditsText, int32(screenWidth)-150, 10, 20, rl.Yellow)
+	// Draw purchase panel on left side
+	r.drawPurchasePanel(mgr, screenHeight)
 
-	// Base count
+	// Base count in top-left area (below purchase panel header)
 	p1Bases := len(mgr.GetBasesOwnedBy(OwnerPlayer1))
 	p2Bases := len(mgr.GetBasesOwnedBy(OwnerPlayer2))
 	neutralBases := len(mgr.GetBasesOwnedBy(OwnerNeutral))
 
-	baseText := fmt.Sprintf("Bases: P1:%d  N:%d  P2:%d", p1Bases, neutralBases, p2Bases)
-	rl.DrawText(baseText, int32(screenWidth)-200, 35, 15, rl.White)
+	baseText := fmt.Sprintf("Bases: You:%d  Neutral:%d  Enemy:%d", p1Bases, neutralBases, p2Bases)
+	rl.DrawText(baseText, 10, 55, 14, rl.White)
 
 	// Game over check
 	loser := mgr.IsGameOver()
@@ -233,6 +232,48 @@ func (r *Renderer) DrawUI(mgr *Manager, screenWidth, screenHeight int) {
 		}
 		textWidth := rl.MeasureText(winText, 40)
 		rl.DrawText(winText, int32(screenWidth/2)-textWidth/2, int32(screenHeight/2)-20, 40, rl.Gold)
+	}
+}
+
+// drawPurchasePanel renders the unit purchase UI
+func (r *Renderer) drawPurchasePanel(mgr *Manager, screenHeight int) {
+	panelX := int32(10)
+	panelY := int32(80)
+	panelWidth := int32(180)
+	lineHeight := int32(22)
+
+	// Credits header
+	creditsText := fmt.Sprintf("Credits: $%.0f", mgr.Player1.Credits)
+	rl.DrawText(creditsText, panelX, 35, 18, rl.Yellow)
+
+	// Panel background
+	panelHeight := lineHeight*int32(len(AllUnitTypes)) + 30
+	rl.DrawRectangle(panelX-5, panelY-5, panelWidth, panelHeight, rl.Color{R: 0, G: 0, B: 0, A: 150})
+
+	// Title
+	rl.DrawText("Purchase Units:", panelX, panelY, 16, rl.White)
+	panelY += 25
+
+	// Unit list with costs
+	keys := []string{"1", "2", "3", "4", "5", "6"}
+	credits := mgr.Player1.Credits
+
+	for i, ut := range AllUnitTypes {
+		cost := UnitCost(ut)
+		name := UnitName(ut)
+
+		// Check if affordable
+		var textColor rl.Color
+		if cost <= credits {
+			textColor = rl.Green
+		} else {
+			textColor = rl.Color{R: 128, G: 128, B: 128, A: 255} // Gray for unaffordable
+		}
+
+		// Format: [1] Infantry - $100
+		unitText := fmt.Sprintf("[%s] %s - $%.0f", keys[i], name, cost)
+		rl.DrawText(unitText, panelX, panelY, 14, textColor)
+		panelY += lineHeight
 	}
 }
 

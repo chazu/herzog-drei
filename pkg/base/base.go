@@ -2,6 +2,8 @@ package base
 
 import (
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"github.com/chazu/herzog-drei/pkg/unit"
 )
 
 // Owner represents who controls a base
@@ -41,12 +43,12 @@ type Config struct {
 // DefaultConfig returns the default base configuration
 func DefaultConfig() Config {
 	return Config{
-		OutpostIncomeRate: 5.0,
-		HQIncomeRate:      2.0,
+		OutpostIncomeRate: 15.0, // Credits per second for outposts
+		HQIncomeRate:      5.0,  // Credits per second for HQ
 		CaptureTime:       5.0,
 		HQMaxHealth:       500.0,
 		OutpostMaxHealth:  200.0,
-		SpawnCooldown:     3.0,
+		SpawnCooldown:     2.0, // Slightly faster spawns
 	}
 }
 
@@ -73,24 +75,14 @@ type Base struct {
 	AccumulatedIncome float32
 
 	// Spawning
-	SpawnPoint    rl.Vector3 // Where units spawn
-	SpawnCooldown float32    // Time until next spawn allowed
-	SpawnQueue    []UnitType // Units waiting to spawn
+	SpawnPoint    rl.Vector3      // Where units spawn
+	SpawnCooldown float32         // Time until next spawn allowed
+	SpawnQueue    []unit.UnitType // Units waiting to spawn
 
 	// Infantry occupying this base (for capture mechanic)
 	OccupyingInfantry int   // Count of infantry inside
 	OccupyingOwner    Owner // Owner of occupying infantry
 }
-
-// UnitType represents types of units that can be spawned
-type UnitType int
-
-const (
-	UnitInfantry UnitType = iota
-	UnitTank
-	UnitAA // Anti-air
-	UnitArtillery
-)
 
 // NewBase creates a new base at the given position
 func NewBase(id int, baseType Type, position rl.Vector3, owner Owner, cfg Config) *Base {
@@ -119,7 +111,7 @@ func NewBase(id int, baseType Type, position rl.Vector3, owner Owner, cfg Config
 		MaxHealth:     maxHealth,
 		IncomeRate:    incomeRate,
 		SpawnPoint:    spawnPoint,
-		SpawnQueue:    make([]UnitType, 0, 8),
+		SpawnQueue:    make([]unit.UnitType, 0, 8),
 	}
 }
 
@@ -186,7 +178,7 @@ func (b *Base) updateCapture(dt float32, cfg Config) {
 }
 
 // QueueUnit adds a unit to the spawn queue
-func (b *Base) QueueUnit(unitType UnitType) {
+func (b *Base) QueueUnit(unitType unit.UnitType) {
 	if b.Owner == OwnerNeutral {
 		return // Can't spawn from neutral bases
 	}
@@ -195,7 +187,7 @@ func (b *Base) QueueUnit(unitType UnitType) {
 
 // TrySpawn attempts to spawn the next unit in queue
 // Returns the unit type and true if a spawn occurred
-func (b *Base) TrySpawn(cfg Config) (UnitType, bool) {
+func (b *Base) TrySpawn(cfg Config) (unit.UnitType, bool) {
 	if len(b.SpawnQueue) == 0 {
 		return 0, false
 	}
