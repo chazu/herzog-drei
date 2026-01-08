@@ -4,6 +4,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"github.com/chazu/herzog-drei/pkg/mech"
+	"github.com/chazu/herzog-drei/pkg/unit"
 )
 
 const (
@@ -26,6 +27,11 @@ type Game struct {
 	playerMech    *mech.Mech
 	mechInput     *mech.InputHandler
 	mechRenderer  *mech.Renderer
+
+	// Units
+	unitManager    *unit.Manager
+	unitRenderer   *unit.Renderer
+	unitPathfinder *unit.Pathfinder
 }
 
 // NewGame creates and initializes a new game instance
@@ -41,6 +47,15 @@ func (g *Game) init() {
 	g.playerMech = mech.New(rl.NewVector3(0, 3, 0), mech.DefaultConfig())
 	g.mechInput = mech.NewInputHandler()
 	g.mechRenderer = mech.NewRenderer()
+
+	// Initialize unit system
+	g.unitManager = unit.NewManager(100) // Max 100 units
+	g.unitRenderer = unit.NewRenderer()
+	g.unitPathfinder = unit.NewPathfinder(80, 80, 1.0) // 80x80 grid, 1 unit cells
+	g.unitManager.Pathfinder = g.unitPathfinder
+
+	// Spawn test units for demonstration
+	g.spawnTestUnits()
 
 	// Set up 3D camera (will follow player)
 	g.camera = rl.Camera3D{
@@ -61,6 +76,12 @@ func (g *Game) Update() {
 
 	// Update mech
 	g.playerMech.Update(dt)
+
+	// Update units
+	g.unitManager.Update(dt)
+
+	// Handle unit spawning (press 1-6 to spawn player units)
+	g.handleUnitSpawnInput()
 
 	// Update camera to follow mech
 	g.updateCamera(dt)
@@ -114,6 +135,9 @@ func (g *Game) Render() {
 	// Draw some reference objects scattered around
 	g.drawEnvironment()
 
+	// Draw units
+	g.unitRenderer.Draw(g.unitManager)
+
 	// Draw player mech
 	g.mechRenderer.Draw(g.playerMech)
 
@@ -125,6 +149,12 @@ func (g *Game) Render() {
 
 	// Draw mech UI
 	g.mechRenderer.DrawUI(g.playerMech, screenWidth, screenHeight)
+
+	// Draw unit UI
+	g.unitRenderer.DrawUI(g.unitManager, screenWidth, screenHeight)
+
+	// Draw spawn hint
+	rl.DrawText("1-6: Spawn units | 1:Infantry 2:Tank 3:Bike 4:SAM 5:Boat 6:Supply", 10, 35, 15, rl.Gray)
 
 	rl.EndDrawing()
 }
@@ -147,6 +177,73 @@ func (g *Game) drawEnvironment() {
 	for _, b := range buildings {
 		rl.DrawCube(b.pos, b.size.X, b.size.Y, b.size.Z, b.color)
 		rl.DrawCubeWires(b.pos, b.size.X, b.size.Y, b.size.Z, rl.Black)
+	}
+}
+
+// spawnTestUnits creates initial units for testing
+func (g *Game) spawnTestUnits() {
+	// Spawn player units on left side
+	g.unitManager.SpawnWithObjective(
+		unit.TypeInfantry, unit.TeamPlayer,
+		rl.NewVector3(-10, 0, 5),
+		rl.NewVector3(10, 0, 5),
+	)
+	g.unitManager.SpawnWithObjective(
+		unit.TypeTank, unit.TeamPlayer,
+		rl.NewVector3(-10, 0, 0),
+		rl.NewVector3(10, 0, 0),
+	)
+	g.unitManager.SpawnWithObjective(
+		unit.TypeMotorcycle, unit.TeamPlayer,
+		rl.NewVector3(-10, 0, -5),
+		rl.NewVector3(10, 0, -5),
+	)
+
+	// Spawn enemy units on right side
+	g.unitManager.SpawnWithObjective(
+		unit.TypeInfantry, unit.TeamEnemy,
+		rl.NewVector3(10, 0, 5),
+		rl.NewVector3(-10, 0, 5),
+	)
+	g.unitManager.SpawnWithObjective(
+		unit.TypeTank, unit.TeamEnemy,
+		rl.NewVector3(10, 0, 0),
+		rl.NewVector3(-10, 0, 0),
+	)
+	g.unitManager.SpawnWithObjective(
+		unit.TypeSAM, unit.TeamEnemy,
+		rl.NewVector3(10, 0, -5),
+		rl.NewVector3(-10, 0, -5),
+	)
+}
+
+// handleUnitSpawnInput spawns units based on number key presses
+func (g *Game) handleUnitSpawnInput() {
+	// Spawn near player mech position
+	spawnPos := g.playerMech.Position
+	spawnPos.Y = 0 // Ground level
+
+	// Offset spawn slightly behind mech
+	spawnPos.X -= g.playerMech.GetForward().X * 2
+	spawnPos.Z -= g.playerMech.GetForward().Z * 2
+
+	if rl.IsKeyPressed(rl.KeyOne) {
+		g.unitManager.Spawn(unit.TypeInfantry, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeyTwo) {
+		g.unitManager.Spawn(unit.TypeTank, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeyThree) {
+		g.unitManager.Spawn(unit.TypeMotorcycle, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeyFour) {
+		g.unitManager.Spawn(unit.TypeSAM, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeyFive) {
+		g.unitManager.Spawn(unit.TypeBoat, unit.TeamPlayer, spawnPos)
+	}
+	if rl.IsKeyPressed(rl.KeySix) {
+		g.unitManager.Spawn(unit.TypeSupply, unit.TeamPlayer, spawnPos)
 	}
 }
 
