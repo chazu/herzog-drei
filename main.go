@@ -3,6 +3,7 @@ package main
 import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"github.com/chazu/herzog-drei/pkg/base"
 	"github.com/chazu/herzog-drei/pkg/mech"
 	"github.com/chazu/herzog-drei/pkg/tilemap"
 	"github.com/chazu/herzog-drei/pkg/unit"
@@ -34,6 +35,10 @@ type Game struct {
 	unitManager    *unit.Manager
 	unitRenderer   *unit.Renderer
 	unitPathfinder *unit.Pathfinder
+
+	// Bases
+	baseManager  *base.Manager
+	baseRenderer *base.Renderer
 }
 
 // NewGame creates and initializes a new game instance
@@ -73,6 +78,11 @@ func (g *Game) init() {
 	g.unitPathfinder = unit.NewPathfinder(mapWidth, mapHeight, 1.0)
 	g.unitManager.Pathfinder = g.unitPathfinder
 
+	// Initialize base system
+	g.baseManager = base.NewManager(base.DefaultConfig())
+	g.baseRenderer = base.NewRenderer()
+	g.baseManager.CreateDefaultMap()
+
 	// Spawn test units for demonstration
 	g.spawnTestUnits()
 }
@@ -104,6 +114,9 @@ func (g *Game) Update() {
 	// Update units
 	g.unitManager.Update(dt)
 
+	// Update bases (income, capture progress, spawns)
+	g.baseManager.Update(dt)
+
 	// Handle unit spawning (press 1-6 to spawn player units)
 	g.handleUnitSpawnInput()
 
@@ -122,6 +135,9 @@ func (g *Game) Render() {
 
 	// Render tile map
 	g.tileMap.Render()
+
+	// Draw bases
+	g.baseRenderer.Draw(g.baseManager)
 
 	// Draw units
 	g.unitRenderer.Draw(g.unitManager)
@@ -146,6 +162,9 @@ func (g *Game) Render() {
 
 	// Draw unit UI
 	g.unitRenderer.DrawUI(g.unitManager, screenWidth, screenHeight)
+
+	// Draw base UI (credits, base counts)
+	g.baseRenderer.DrawUI(g.baseManager, screenWidth, screenHeight)
 
 	// Show current terrain info
 	terrain := g.tileMap.GetTerrainAt(g.playerMech.Position.X, g.playerMech.Position.Z)
