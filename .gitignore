@@ -1,0 +1,14 @@
+# Binary
+herzog-drei
+
+# Runtime directory (Gas Town)
+.runtime/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
