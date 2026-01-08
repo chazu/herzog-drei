@@ -26,6 +26,11 @@ func (r *Renderer) Draw(m *Mech) {
 		r.drawRobotMode(m)
 	}
 
+	// Draw carried unit if any
+	if m.CarriedUnit != nil {
+		r.drawCarriedUnit(m)
+	}
+
 	// Draw projectiles
 	r.drawProjectiles(m)
 }
@@ -153,6 +158,21 @@ func (r *Renderer) drawShadow(pos rl.Vector3) {
 	)
 }
 
+func (r *Renderer) drawCarriedUnit(m *Mech) {
+	if m.CarriedUnit == nil {
+		return
+	}
+
+	// Draw the unit attached below the mech
+	pos := m.Position
+	unitPos := rl.NewVector3(pos.X, pos.Y-0.5, pos.Z)
+
+	// Simple representation of carried unit
+	unitColor := m.CarriedUnit.GetOwnerColor()
+	rl.DrawSphere(unitPos, 0.25, unitColor)
+	rl.DrawSphereWires(unitPos, 0.25, 8, 8, rl.Black)
+}
+
 func (r *Renderer) drawProjectiles(m *Mech) {
 	for _, p := range m.Projectiles {
 		if !p.Alive {
@@ -190,7 +210,7 @@ func (r *Renderer) DrawUI(m *Mech, screenWidth, screenHeight int) {
 	barWidth := float32(200)
 	barHeight := float32(20)
 	barX := float32(10)
-	barY := float32(screenHeight) - barHeight - 40
+	barY := float32(screenHeight) - barHeight - 60
 
 	// Background
 	rl.DrawRectangle(int32(barX), int32(barY), int32(barWidth), int32(barHeight), rl.DarkGray)
@@ -234,8 +254,28 @@ func (r *Renderer) DrawUI(m *Mech, screenWidth, screenHeight int) {
 
 	rl.DrawText(modeText, int32(barX), int32(barY-40), 20, modeColor)
 
+	// Transport status (right side of screen)
+	transportX := int32(screenWidth - 220)
+	transportY := int32(screenHeight - 120)
+
+	// Selected order (always shown in jet mode)
+	if m.Mode == ModeJet {
+		orderText := fmt.Sprintf("Order: %s", m.GetSelectedOrderName())
+		rl.DrawText(orderText, transportX, transportY, 18, rl.Yellow)
+		rl.DrawText("R/F: Change Order", transportX, transportY+22, 14, rl.Gray)
+	}
+
+	// Carried unit status
+	if m.CarriedUnit != nil {
+		carryText := fmt.Sprintf("Carrying: %s", m.CarriedUnit.GetTypeName())
+		rl.DrawText(carryText, transportX, transportY+45, 18, rl.Green)
+		rl.DrawText("Q: Drop Unit", transportX, transportY+67, 14, rl.Gray)
+	} else if m.Mode == ModeJet {
+		rl.DrawText("E: Pick Up Unit", transportX, transportY+45, 14, rl.Gray)
+	}
+
 	// Controls hint
-	rl.DrawText("WASD: Move | SPACE: Shoot | T: Transform", 10, int32(screenHeight)-20, 15, rl.Gray)
+	rl.DrawText("WASD: Move | SPACE: Shoot | T: Transform | E: Pickup | Q: Drop", 10, int32(screenHeight)-20, 15, rl.Gray)
 }
 
 func lerp(a, b, t float32) float32 {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/chazu/herzog-drei/pkg/base"
 	"github.com/chazu/herzog-drei/pkg/mech"
+	"github.com/chazu/herzog-drei/pkg/unit"
 )
 
 const (
@@ -31,6 +32,10 @@ type Game struct {
 	// Bases
 	baseManager  *base.Manager
 	baseRenderer *base.Renderer
+
+	// Units
+	unitManager  *unit.Manager
+	unitRenderer *unit.Renderer
 }
 
 // NewGame creates and initializes a new game instance
@@ -52,6 +57,21 @@ func (g *Game) init() {
 	g.baseRenderer = base.NewRenderer()
 	g.baseManager.CreateDefaultMap()
 
+	// Initialize unit system
+	g.unitManager = unit.NewManager()
+	g.unitRenderer = unit.NewRenderer()
+
+	// Spawn some test units for Player 1
+	g.unitManager.Spawn(unit.TypeInfantry, rl.NewVector3(-5, 0, -10), unit.OwnerPlayer1)
+	g.unitManager.Spawn(unit.TypeTank, rl.NewVector3(-3, 0, -10), unit.OwnerPlayer1)
+	g.unitManager.Spawn(unit.TypeAA, rl.NewVector3(-1, 0, -10), unit.OwnerPlayer1)
+	g.unitManager.Spawn(unit.TypeMotorcycle, rl.NewVector3(1, 0, -10), unit.OwnerPlayer1)
+
+	// Spawn some test units for Player 2 (enemy)
+	g.unitManager.Spawn(unit.TypeInfantry, rl.NewVector3(-5, 0, 15), unit.OwnerPlayer2)
+	g.unitManager.Spawn(unit.TypeTank, rl.NewVector3(-3, 0, 15), unit.OwnerPlayer2)
+	g.unitManager.Spawn(unit.TypeAA, rl.NewVector3(-1, 0, 15), unit.OwnerPlayer2)
+
 	// Set up 3D camera (will follow player)
 	g.camera = rl.Camera3D{
 		Position:   rl.NewVector3(0, cameraHeight, -cameraDistance),
@@ -69,14 +89,40 @@ func (g *Game) Update() {
 	// Process player input
 	g.mechInput.Update(g.playerMech)
 
+	// Handle pickup/drop
+	g.handleTransport()
+
 	// Update mech
 	g.playerMech.Update(dt)
+
+	// Update units
+	g.unitManager.Update(dt)
+	g.unitManager.UpdateTargets()
 
 	// Update bases (income, capture progress, spawns)
 	g.baseManager.Update(dt)
 
 	// Update camera to follow mech
 	g.updateCamera(dt)
+}
+
+// handleTransport processes pickup and drop inputs
+func (g *Game) handleTransport() {
+	m := g.playerMech
+
+	// Handle pickup
+	if m.InputPickup && m.CanPickup() {
+		// Find nearest friendly unit to pick up
+		target := g.unitManager.GetNearestPickupTarget(m.Position, m.Owner)
+		if target != nil {
+			m.PickupUnit(target)
+		}
+	}
+
+	// Handle drop
+	if m.InputDrop && m.CanDrop() {
+		m.DropUnit()
+	}
 }
 
 func (g *Game) updateCamera(dt float32) {
@@ -127,6 +173,9 @@ func (g *Game) Render() {
 	// Draw bases
 	g.baseRenderer.Draw(g.baseManager)
 
+	// Draw units
+	g.unitRenderer.Draw(g.unitManager)
+
 	// Draw player mech
 	g.mechRenderer.Draw(g.playerMech)
 
@@ -141,6 +190,9 @@ func (g *Game) Render() {
 
 	// Draw base UI (credits, base counts)
 	g.baseRenderer.DrawUI(g.baseManager, screenWidth, screenHeight)
+
+	// Draw unit UI
+	g.unitRenderer.DrawUI(g.unitManager, screenWidth, screenHeight)
 
 	rl.EndDrawing()
 }
