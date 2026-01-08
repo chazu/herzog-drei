@@ -4,6 +4,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"github.com/chazu/herzog-drei/pkg/base"
+	"github.com/chazu/herzog-drei/pkg/combat"
 	"github.com/chazu/herzog-drei/pkg/mech"
 	"github.com/chazu/herzog-drei/pkg/tilemap"
 	"github.com/chazu/herzog-drei/pkg/unit"
@@ -39,6 +40,10 @@ type Game struct {
 	// Bases
 	baseManager  *base.Manager
 	baseRenderer *base.Renderer
+
+	// Combat
+	combatSystem   *combat.System
+	combatRenderer *combat.Renderer
 }
 
 // NewGame creates and initializes a new game instance
@@ -83,6 +88,11 @@ func (g *Game) init() {
 	g.baseRenderer = base.NewRenderer()
 	g.baseManager.CreateDefaultMap()
 
+	// Initialize combat system
+	g.combatSystem = combat.NewSystem(combat.DefaultConfig())
+	g.combatRenderer = combat.NewRenderer()
+	g.combatSystem.SetRespawnPosition(startPos) // Respawn at start position
+
 	// Spawn test units for demonstration
 	g.spawnTestUnits()
 }
@@ -117,6 +127,9 @@ func (g *Game) Update() {
 	// Update bases (income, capture progress, spawns)
 	g.baseManager.Update(dt)
 
+	// Update combat (hit detection, damage, respawn)
+	g.combatSystem.Update(dt, g.playerMech, g.unitManager)
+
 	// Handle unit spawning (press 1-6 to spawn player units)
 	g.handleUnitSpawnInput()
 
@@ -145,6 +158,9 @@ func (g *Game) Render() {
 	// Draw player mech
 	g.mechRenderer.Draw(g.playerMech)
 
+	// Draw combat effects (explosions)
+	g.combatRenderer.Draw(g.combatSystem)
+
 	g.camera.End3D()
 
 	// Draw minimap with player marker
@@ -165,6 +181,9 @@ func (g *Game) Render() {
 
 	// Draw base UI (credits, base counts)
 	g.baseRenderer.DrawUI(g.baseManager, screenWidth, screenHeight)
+
+	// Draw combat UI (respawn timer, invulnerability)
+	g.combatRenderer.DrawUI(g.combatSystem, screenWidth, screenHeight)
 
 	// Show current terrain info
 	terrain := g.tileMap.GetTerrainAt(g.playerMech.Position.X, g.playerMech.Position.Z)
